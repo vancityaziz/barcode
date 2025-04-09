@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Barcode App</title>
+  <script src="https://unpkg.com/quagga/dist/quagga.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      text-align: center;
+      background: #f5f5f5;
+    }
+    #top-bar {
+      width: 100%;
+      background: #042c64;
+      padding: 10px 0;
+      color: white;
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #top-bar button {
+      margin-left: 20px;
+      background: white;
+      color: #042c64;
+      border: none;
+      padding: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #top-bar span {
+      margin-right: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    #password-container {
+      margin-top: 20vh;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+      max-width: 300px;
+      margin-left: auto;
+      margin-right: auto;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    #main-content, #generator-content {
+      display: none;
+      padding: 10px;
+    }
+    select, input[type="password"], input[type="text"] {
+      padding: 10px;
+      margin: 10px;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 5px;
+      border: none;
+      color: white;
+      background: #042c64;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #031c46;
+    }
+    #scanner-box {
+      width: 100%;
+      height: 300px;
+      background: #ddd;
+      margin: 10px auto;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #scanner-container {
+      width: 100%;
+      height: 100%;
+    }
+    .zoom-controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    .table-container {
+      overflow-x: auto;
+      margin-top: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+    th, td {
+      border: 1px solid black;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background: #042c64;
+      color: white;
+    }
+    #label-preview {
+      width: 6in;
+      height: 4in;
+      background: white;
+      margin: 20px auto;
+      border: 2px solid #042c64;
+      padding: 20px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-size: 20px;
+    }
+    #label-preview svg {
+      margin-top: 10px;
+    }
+    @media screen and (max-width: 600px) {
+      #scanner-box {
+        height: 250px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div id="top-bar">
+  <button onclick="goHome()">Home</button>
+  <span id="page-title"></span>
+</div>
+
+<div id="password-container">
+  <h2>Enter Password</h2>
+  <input type="password" id="password-input" />
+  <button onclick="checkPassword()">Submit</button>
+  <p id="error-message" style="color: red; display: none;">Incorrect password.</p>
+</div>
+
+<div id="main-content">
+  <h2>Barcode Scanner</h2>
+  <select id="warehouse-selector" onchange="changeWarehouse()">
+    <option value="A">Warehouse A</option>
+    <option value="B">Warehouse B</option>
+    <option value="C">Warehouse C</option>
+  </select>
+  <button onclick="startScanner()">Start Scanning</button>
+  <button id="toggle-flashlight" onclick="toggleFlashlight()" style="display: none;">Toggle Flashlight</button>
+  <div id="scanner-box"><div id="scanner-container"></div></div>
+  <div class="zoom-controls">
+    <label for="zoom-slider">Zoom:</label>
+    <input type="range" id="zoom-slider" min="1" max="3" step="0.1" value="1">
+    <button onclick="resetZoom()">Reset Zoom</button>
+  </div>
+  <p id="barcode-result">Scan a barcode...</p>
+  <button onclick="copyTableData()">Copy Table Data</button>
+  <div class="table-container">
+    <table id="barcode-table">
+      <thead>
+        <tr>
+          <th>Barcode#</th>
+          <th>SKU</th>
+          <th>Quality</th>
+          <th>Thickness (mm)</th>
+          <th>Reel Width (mm)</th>
+          <th>Quantity</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="generator-content">
+  <h2>Barcode Generator</h2>
+  <input type="text" id="input-barcode" placeholder="Barcode Number">
+  <input type="text" id="input-sku" placeholder="SKU">
+  <input type="text" id="input-quality" placeholder="Quality">
+  <input type="text" id="input-thickness" placeholder="Thickness (mm)">
+  <input type="text" id="input-width" placeholder="Reel Width (mm)">
+  <button onclick="generateLabel()">Generate Label</button>
+  <button onclick="resetGenerator()">Restart Generator</button>
+  <div id="label-preview">
+    <div id="label-details"></div>
+    <svg id="generated-label-barcode"></svg>
+  </div>
+</div>
+
+<script>
+  const barcodeData = {
+    "1010004533651628": ["TJ 2XT", "K20", "0.300", "105.6"],
+    "9876543210987654": ["XZ 9YQ", "M15", "0.250", "98.4"]
+  };
+  let scannedBarcodes = { A: {}, B: {}, C: {} };
+  let currentWarehouse = "A";
+  let scanningEnabled = true;
+  let stream;
+  let isFlashlightOn = false;
+  let currentZoom = 1;
+  let videoTrack;
+
+  function checkPassword() {
+    const input = document.getElementById("password-input").value;
+    const pwContainer = document.getElementById("password-container");
+    const scannerContent = document.getElementById("main-content");
+    const generatorContent = document.getElementById("generator-content");
+    const topBar = document.getElementById("top-bar");
+    const pageTitle = document.getElementById("page-title");
+
+    if (input === "678121") {
+      pwContainer.style.display = "none";
+      scannerContent.style.display = "block";
+      generatorContent.style.display = "none";
+      topBar.style.display = "flex";
+      pageTitle.textContent = "Scanner";
+      loadScannedBarcodes();
+      updateBarcodeTable();
+    } else if (input === "123456") {
+      pwContainer.style.display = "none";
+      scannerContent.style.display = "none";
+      generatorContent.style.display = "block";
+      topBar.style.display = "flex";
+      pageTitle.textContent = "Generator";
+    } else {
+      document.getElementById("error-message").style.display = "block";
+    }
+  }
+
+  function goHome() {
+    document.getElementById("password-container").style.display = "block";
+    document.getElementById("main-content").style.display = "none";
+    document.getElementById("generator-content").style.display = "none";
+    document.getElementById("top-bar").style.display = "none";
+    document.getElementById("error-message").style.display = "none";
+  }
+
+  function resetGenerator() {
+    document.getElementById("input-barcode").value = "";
+    document.getElementById("input-sku").value = "";
+    document.getElementById("input-quality").value = "";
+    document.getElementById("input-thickness").value = "";
+    document.getElementById("input-width").value = "";
+    document.getElementById("label-details").innerHTML = "";
+    document.getElementById("generated-label-barcode").innerHTML = "";
+  }
+
+  function generateLabel() {
+    const barcode = document.getElementById("input-barcode").value;
+    const sku = document.getElementById("input-sku").value;
+    const quality = document.getElementById("input-quality").value;
+    const thickness = document.getElementById("input-thickness").value;
+    const width = document.getElementById("input-width").value;
+    const labelHTML = `<div><strong>SKU:</strong> ${sku}</div><div><strong>Quality:</strong> ${quality}</div><div><strong>Thickness:</strong> ${thickness} mm</div><div><strong>Reel Width:</strong> ${width} mm</div>`;
+    document.getElementById("label-details").innerHTML = labelHTML;
+    JsBarcode("#generated-label-barcode", barcode, {
+      format: "CODE128",
+      displayValue: true,
+      fontSize: 20,
+      height: 100
+    });
+  }
+
+  function changeWarehouse() {
+    currentWarehouse = document.getElementById("warehouse-selector").value;
+    updateBarcodeTable();
+  }
+  function startScanner() {
+    scanningEnabled = true;
+    document.getElementById("toggle-flashlight").style.display = "block";
+    Quagga.init({ inputStream: { name: "Live", type: "LiveStream", constraints: { facingMode: "environment", zoom: currentZoom }, target: document.querySelector("#scanner-container") }, decoder: { readers: ["code_128_reader", "ean_reader", "ean_8_reader", "upc_reader"] } }, function (err) {
+      if (err) { console.error(err); return; }
+      Quagga.start();
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(mediaStream => {
+        stream = mediaStream;
+        videoTrack = stream.getVideoTracks()[0];
+        applyZoom(currentZoom);
+      });
+    });
+    Quagga.onDetected(onBarcodeDetected);
+  }
+  function onBarcodeDetected(result) {
+    if (!scanningEnabled) return;
+    scanningEnabled = false;
+    Quagga.stop();
+    const barcode = result.codeResult.code;
+    document.getElementById("barcode-result").textContent = "Scanned: " + barcode;
+    if (!barcodeData[barcode]) {
+      alert("Barcode not recognized.");
+      resumeScanner();
+      return;
+    }
+    if (scannedBarcodes[currentWarehouse][barcode]) {
+      scannedBarcodes[currentWarehouse][barcode].quantity += 1;
+    } else {
+      scannedBarcodes[currentWarehouse][barcode] = {
+        barcode,
+        details: barcodeData[barcode],
+        quantity: 1
+      };
+    }
+    saveScannedBarcodes();
+    updateBarcodeTable();
+  }
+  function resumeScanner() {
+    document.getElementById("barcode-result").textContent = "Scan a barcode...";
+    scanningEnabled = true;
+    Quagga.start();
+  }
+  function updateBarcodeTable() {
+    const tbody = document.querySelector("#barcode-table tbody");
+    tbody.innerHTML = "";
+    Object.values(scannedBarcodes[currentWarehouse]).forEach(({ barcode, details, quantity }) => {
+      const row = `<tr><td>${barcode}</td><td>${details[0]}</td><td>${details[1]}</td><td>${details[2]}</td><td>${details[3]}</td><td>${quantity}</td></tr>`;
+      tbody.innerHTML += row;
+    });
+  }
+  function copyTableData() {
+    const table = document.getElementById("barcode-table");
+    let text = "";
+    for (let row of table.rows) {
+      let rowData = Array.from(row.cells).map(cell => cell.innerText).join("\t");
+      text += rowData + "\n";
+    }
+    navigator.clipboard.writeText(text).then(() => alert("Table copied!")).catch(err => alert("Copy failed: " + err));
+  }
+  async function toggleFlashlight() {
+    if (!stream) return alert("Scanner not started yet.");
+    const capabilities = videoTrack.getCapabilities();
+    if (!capabilities.torch) return alert("Flashlight not supported.");
+    isFlashlightOn = !isFlashlightOn;
+    try {
+      await videoTrack.applyConstraints({ advanced: [{ torch: isFlashlightOn }] });
+    } catch (err) {
+      console.error("Flashlight error", err);
+    }
+  }
+  function saveScannedBarcodes() {
+    localStorage.setItem("scannedBarcodes", JSON.stringify(scannedBarcodes));
+  }
+  function loadScannedBarcodes() {
+    const data = localStorage.getItem("scannedBarcodes");
+    if (data) scannedBarcodes = JSON.parse(data);
+  }
+  document.getElementById("zoom-slider").addEventListener("input", (e) => {
+    currentZoom = parseFloat(e.target.value);
+    applyZoom(currentZoom);
+  });
+  function applyZoom(zoom) {
+    if (videoTrack && videoTrack.getCapabilities().zoom) {
+      videoTrack.applyConstraints({ advanced: [{ zoom }] }).catch(err => console.log("Zoom error", err));
+    }
+  }
+  function resetZoom() {
+    currentZoom = 1;
+    document.getElementById("zoom-slider").value = 1;
+    applyZoom(1);
+  }
+</script>
+</body>
+</html>
